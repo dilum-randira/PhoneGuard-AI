@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SECURE_OPTIC // OPTIMIZED</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #0f0;
+            user-select: none;
+        }
+
+        #debug-log {
+            position: absolute;
+            bottom: 10px; left: 10px;
+            color: #ffff00; font-size: 12px;
+            z-index: 200; pointer-events: none;
+            max-width: 80%;
+            background: rgba(0,0,0,0.5); padding: 5px;
+        }
+
+        #container {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 1; background: #000;
+        }
+
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; pointer-events: none;
+        }
+
+        #tracker-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        /* Tracker Box Styles */
+        .tracker-box {
+            position: absolute;
+            border: 2px solid #0f0;
+            box-shadow: 0 0 10px #0f0, inset 0 0 10px #0f0;
+            transition: all 0.1s;
+        }
+        
+        .tracker-label {
+            position: absolute;
+            top: -20px; left: 0;
+            background: #0f0; color: #000;
+            font-size: 10px; padding: 2px 5px; font-weight: bold;
+            white-space: nowrap;
+        }
+
+        /* Violation Styles */
+        .violation-phone {
+            border-color: #ff0000;
+            box-shadow: 0 0 15px #ff0000;
+        }
+        .violation-phone .tracker-label { background: #ff0000; color: #fff; }
+
+        .violation-call {
+            border-color: #d000ff; /* Purple for Call */
+            box-shadow: 0 0 20px #d000ff;
+        }
+        .violation-call .tracker-label { background: #d000ff; color: #fff; }
+
+        /* Start Screen */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95); z-index: 100;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            cursor: pointer; pointer-events: auto;
+        }
+
+        #start-btn {
+            border: 2px solid #0f0; padding: 20px 40px; font-size: 24px;
+            color: #0f0; text-transform: uppercase; letter-spacing: 4px;
+            background: transparent; transition: all 0.3s;
+            animation: pulse-btn 2s infinite;
+        }
+
+        #start-btn:hover { background: #0f0; color: #000; box-shadow: 0 0 30px #0f0; }
+
+        @keyframes pulse-btn {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; text-shadow: 0 0 10px #0f0; }
+            100% { opacity: 0.8; }
+        }
+
+        /* HUD Header Elements */
+        #header-bar {
+            position: absolute; top: 20px; width: 100%;
+            display: flex; justify-content: space-between;
+            padding: 0 40px; box-sizing: border-box;
+            text-shadow: 0 0 5px #0f0;
+        }
+
+        #status-text {
+            font-size: 20px; letter-spacing: 3px; font-weight: bold;
+        }
+        
+        #timer-display {
+            display: none; color: #ff0000; font-size: 14px; margin-top: 5px;
+        }
+
+        /* Stats Counter */
+        #stats-box {
+            text-align: right;
+            border: 1px solid #0f0;
+            padding: 5px 10px;
+            background: rgba(0, 20, 0, 0.8);
+            font-size: 14px;
+        }
+
+        .stat-item { margin-left: 15px; }
+        .stat-val { color: #fff; font-weight: bold; }
+
+        .alert-mode {
+            color: #ff0000 !important;
+            text-shadow: 0 0 10px #ff0000 !important;
+            border-color: #ff0000 !important;
+        }
+
+        video { 
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 640px; min-height: 480px;
+            opacity: 0.001; z-index: -10; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="debug-log">Log: System Standby.</div>
+
+    <div id="start-screen">
+        <div id="start-btn">INITIALIZE SYSTEM</div>
+        <div style="margin-top: 15px; color: #666; font-size: 12px;">Optimized AI | Multi-Target Counters</div>
+    </div>
+
+    <video id="video" playsinline muted autoplay></video>
+
+    <div id="hud">
+        <div id="header-bar">
+            <div>
+                <div id="status-text">SYSTEM: STANDBY</div>
+                <div id="timer-display">AUTO-RESET IN: 20s</div>
+            </div>
+            
+            <div id="stats-box">
+                [ SENSORS ACTIVE ]<br>
+                <span class="stat-item">USERS: <span id="count-users" class="stat-val">0</span></span>
+                <span class="stat-item">PHONES: <span id="count-phones" class="stat-val">0</span></span>
+            </div>
+        </div>
+
+        <div id="tracker-layer"></div>
+    </div>
+
+    <div id="container"></div>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+    <!-- Shaders -->
+    <script id="vertexShader" type="x-shader/x-vertex">
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        uniform sampler2D tDiffuse;
+        uniform float uTime;
+        uniform float uAlertLevel; 
+
+        varying vec2 vUv;
+
+        float random(vec2 st) {
+            return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+        }
+
+        void main() {
+            vec2 uv = vUv;
+            
+            // Glitch Shake
+            if (uAlertLevel > 0.0) {
+                float shake = (random(vec2(uTime, uv.y)) - 0.5) * 0.05 * uAlertLevel;
+                uv.x += shake;
+            }
+
+            // RGB Split
+            float shift = 0.02 * uAlertLevel;
+            float r = texture2D(tDiffuse, uv + vec2(shift, 0.0)).r;
+            float g = texture2D(tDiffuse, uv).g;
+            float b = texture2D(tDiffuse, uv - vec2(shift, 0.0)).b;
+            
+            vec3 color = vec3(r, g, b);
+
+            // Red Tint on Alert
+            if (uAlertLevel > 0.5) {
+                color.r += 0.4; color.g *= 0.5; color.b *= 0.5;
+                float scanline = sin(uv.y * 500.0 + uTime * 10.0);
+                if(scanline > 0.5) color *= 0.8;
+            }
+
+            gl_FragColor = vec4(color, 1.0);
+        }
+    </script>
+
+    <script>
+        // --- Utils ---
+        function log(msg) {
+            const el = document.getElementById('debug-log');
+            if(el) el.innerText = "Log: " + msg;
+        }
+
+        // --- Globals ---
+        const ALARM_DURATION_MS = 20000;
+        const COOLDOWN_MS = 3000;
+        const DETECTION_INTERVAL_MS = 100; // Run AI every 100ms (10 FPS) for performance
+
+        let audioCtx;
+        let oscillator = null;
+        let gainNode = null;
+        let isAlarmActive = false;
+        
+        let model = null;
+        let isViolationActive = false;
+        let isCooldownActive = false;
+        let lastDetectionTime = 0;
+        
+        let alarmTimeout = null;
+        let countdownInterval = null;
+        
+        let scene, camera, renderer, material;
+        const clock = new THREE.Clock();
+
+        // --- DOM Elements ---
+        const video = document.getElementById('video');
+        const startScreen = document.getElementById('start-screen');
+        const startBtn = document.getElementById('start-btn');
+        const statusText = document.getElementById('status-text');
+        const timerDisplay = document.getElementById('timer-display');
+        const trackerLayer = document.getElementById('tracker-layer');
+        const countUsers = document.getElementById('count-users');
+        const countPhones = document.getElementById('count-phones');
+        const statsBox = document.getElementById('stats-box');
+
+        // --- 1. System Initialization ---
+        startScreen.addEventListener('click', async () => {
+            startBtn.innerText = "ACCESSING HARDWARE...";
+            
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+
+            try {
+                await setupCamera();
+                initThree();
+                log("Loading Neural Net...");
+                await loadAI();
+                
+                startScreen.style.display = 'none';
+                statusText.innerText = "SCANNING SECTOR...";
+                animate();
+                detectLoop();
+                log("System Optimized & Active.");
+            } catch (err) {
+                startBtn.innerText = "SYSTEM FAILURE";
+                startBtn.style.color = "red";
+                startBtn.style.borderColor = "red";
+                log("ERROR: " + err.message);
+                alert("Error: " + err.message);
+            }
+        });
+
+        // --- 2. Audio Engine ---
+        function startAlarmSound() {
+            if (isAlarmActive || !audioCtx) return;
+            isAlarmActive = true;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            oscillator = audioCtx.createOscillator();
+            gainNode = audioCtx.createGain();
+
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.value = 800;
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.start();
+            
+            const now = audioCtx.currentTime;
+            gainNode.gain.setValueAtTime(0.1, now);
+            gainNode.gain.linearRampToValueAtTime(0.3, now + 0.5);
+        }
+
+        function stopAlarmSound() {
+            if (!isAlarmActive) return;
+            isAlarmActive = false;
+            if (oscillator) {
+                const now = audioCtx.currentTime;
+                try {
+                    gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
+                    oscillator.stop(now + 0.1);
+                } catch(e) {}
+                oscillator = null;
+            }
+        }
+
+        function updateSiren() {
+            if (isAlarmActive && oscillator && audioCtx) {
+                const time = audioCtx.currentTime;
+                const freq = 800 + Math.sin(time * 15) * 400; 
+                oscillator.frequency.setValueAtTime(freq, time);
+            }
+        }
+
+        // --- 3. Camera Setup ---
+        async function setupCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("WebRTC not supported");
+            }
+            const constraints = {
+                audio: false,
+                video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+            };
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+            } catch (e) {
+                const simpleStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = simpleStream;
+            }
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => { video.play(); resolve(); };
+            });
+        }
+
+        // --- 4. Three.js Setup ---
+        function initThree() {
+            const container = document.getElementById('container');
+            container.innerHTML = '';
+
+            scene = new THREE.Scene();
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            const videoTexture = new THREE.VideoTexture(video);
+            videoTexture.minFilter = THREE.LinearFilter;
+            
+            const uniforms = {
+                tDiffuse: { value: videoTexture },
+                uTime: { value: 0.0 },
+                uAlertLevel: { value: 0.0 }
+            };
+
+            material = new THREE.ShaderMaterial({
+                uniforms: uniforms,
+                vertexShader: document.getElementById('vertexShader').textContent,
+                fragmentShader: document.getElementById('fragmentShader').textContent
+            });
+
+            scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+            window.addEventListener('resize', () => { renderer.setSize(window.innerWidth, window.innerHeight); });
+        }
+
+        // --- 5. AI Detection & Multi-Target Logic ---
+        async function loadAI() {
+            model = await cocoSsd.load();
+        }
+
+        function checkOverlap(box1, box2) {
+            // box: [x, y, w, h]
+            const x1 = box1[0], y1 = box1[1], w1 = box1[2], h1 = box1[3];
+            const x2 = box2[0], y2 = box2[1], w2 = box2[2], h2 = box2[3];
+
+            return (x1 < x2 + w2 && x1 + w1 > x2 &&
+                    y1 < y2 + h2 && y1 + h1 > y2);
+        }
+
+        async function detectLoop() {
+            if (!model) return;
+            
+            // Throttle: Don't run AI every frame. Run every 100ms.
+            const now = Date.now();
+            if (now - lastDetectionTime < DETECTION_INTERVAL_MS) {
+                requestAnimationFrame(detectLoop);
+                return;
+            }
+            lastDetectionTime = now;
+
+            if (isCooldownActive) { requestAnimationFrame(detectLoop); return; }
+
+            if (video.readyState === 4) {
+                try {
+                    // Lower threshold to 0.4 to find phones easier
+                    const predictions = await model.detect(video, 20, 0.4); 
+                    
+                    // Filter Targets
+                    const phones = predictions.filter(p => p.class === 'cell phone');
+                    const people = predictions.filter(p => p.class === 'person');
+
+                    // Update Counters
+                    countUsers.innerText = people.length;
+                    countPhones.innerText = phones.length;
+
+                    // Clear previous trackers
+                    trackerLayer.innerHTML = '';
+
+                    let violationFound = false;
+                    let callDetected = false;
+
+                    // Draw People Trackers (Blue/Neutral)
+                    people.forEach(person => {
+                        createTracker(person.bbox, "person");
+                    });
+
+                    // Process Phones
+                    phones.forEach(phone => {
+                        violationFound = true;
+                        let isOnCall = false;
+
+                        // Call Heuristic: Check if phone overlaps with "head area" of any person
+                        for (let person of people) {
+                            const headBox = [
+                                person.bbox[0], 
+                                person.bbox[1], 
+                                person.bbox[2], 
+                                person.bbox[3] * 0.35 // Use top 35% as head region
+                            ];
+                            
+                            if (checkOverlap(phone.bbox, headBox)) {
+                                isOnCall = true;
+                                callDetected = true;
+                                break;
+                            }
+                        }
+
+                        createTracker(phone.bbox, isOnCall ? "call" : "phone");
+                    });
+
+                    // State Machine
+                    if (violationFound) {
+                        if (!isViolationActive) {
+                            isViolationActive = true;
+                            triggerAlert(callDetected ? "CALL" : "PHONE");
+                        } else if (callDetected) {
+                            const currentText = statusText.innerText;
+                            if (!currentText.includes("CALL")) {
+                                statusText.innerText = "VIOLATION: CALL IN PROGRESS";
+                            }
+                        }
+                    } else {
+                        if (isViolationActive) {
+                            isViolationActive = false;
+                            clearAlert(false);
+                        }
+                    }
+
+                } catch (e) {
+                    // console.log(e);
+                }
+            }
+            requestAnimationFrame(detectLoop);
+        }
+
+        function createTracker(bbox, type) {
+            // bbox to screen coords
+            const vidW = video.videoWidth;
+            const vidH = video.videoHeight;
+            const winW = window.innerWidth;
+            const winH = window.innerHeight;
+            const scale = Math.max(winW / vidW, winH / vidH);
+            
+            const renderW = vidW * scale;
+            const renderH = vidH * scale;
+            const offsetX = (winW - renderW) / 2;
+            const offsetY = (winH - renderH) / 2;
+
+            const x = bbox[0] * scale + offsetX;
+            const y = bbox[1] * scale + offsetY;
+            const w = bbox[2] * scale;
+            const h = bbox[3] * scale;
+
+            const div = document.createElement('div');
+            
+            if (type === 'person') {
+                div.className = 'tracker-box'; // Default Green
+                div.style.borderColor = 'rgba(0, 255, 0, 0.3)';
+                div.style.boxShadow = 'none';
+            } else {
+                div.className = `tracker-box violation-${type}`;
+            }
+            
+            div.style.left = x + 'px';
+            div.style.top = y + 'px';
+            div.style.width = w + 'px';
+            div.style.height = h + 'px';
+
+            // Only label violations
+            if (type !== 'person') {
+                const label = document.createElement('div');
+                label.className = 'tracker-label';
+                label.innerText = type === 'call' ? "⚠️ CALL DETECTED" : "PROHIBITED DEVICE";
+                div.appendChild(label);
+            }
+            
+            trackerLayer.appendChild(div);
+        }
+
+        // --- 6. Alert & Timer Logic ---
+        function triggerAlert(type) {
+            statusText.innerText = type === "CALL" ? "VIOLATION: CALL IN PROGRESS" : "VIOLATION DETECTED: PHONE";
+            statusText.classList.add('alert-mode');
+            statsBox.classList.add('alert-mode');
+            
+            startAlarmSound();
+            material.uniforms.uAlertLevel.value = 1.0;
+
+            timerDisplay.style.display = 'block';
+            let timeLeft = ALARM_DURATION_MS / 1000;
+            timerDisplay.innerText = `AUTO-RESET IN: ${timeLeft}s`;
+
+            if (countdownInterval) clearInterval(countdownInterval);
+            if (alarmTimeout) clearTimeout(alarmTimeout);
+
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.innerText = `AUTO-RESET IN: ${timeLeft}s`;
+                if(timeLeft <= 0) clearInterval(countdownInterval);
+            }, 1000);
+
+            alarmTimeout = setTimeout(() => {
+                log("Auto-reset timer triggered.");
+                clearAlert(true);
+            }, ALARM_DURATION_MS);
+        }
+
+        function clearAlert(isTimeout) {
+            if (countdownInterval) clearInterval(countdownInterval);
+            if (alarmTimeout) clearTimeout(alarmTimeout);
+            
+            statusText.classList.remove('alert-mode');
+            statsBox.classList.remove('alert-mode');
+            timerDisplay.style.display = 'none';
+            
+            stopAlarmSound();
+            material.uniforms.uAlertLevel.value = 0.0;
+
+            if (isTimeout) {
+                statusText.innerText = "SYSTEM REBOOTING...";
+                isCooldownActive = true;
+                setTimeout(() => {
+                    isCooldownActive = false;
+                    statusText.innerText = "SCANNING SECTOR...";
+                }, COOLDOWN_MS);
+            } else {
+                statusText.innerText = "SCANNING SECTOR...";
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            material.uniforms.uTime.value = clock.getElapsedTime();
+            updateSiren();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
