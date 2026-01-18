@@ -6,7 +6,7 @@ Real-time webcam **mobile phone detector** with alerts and tracking.
 
 ## 🌍 Live Demo
 (Add your link here)  
-🔗 https://YOUR_LIVE_DEMO_LINK_HERE
+🔗 https://dilum-randira.github.io/PhoneGuard-AI/
 
 ---
 
